@@ -242,141 +242,218 @@ Ein Interrupt ist eine Aufforderung zur Systemunterbrechung um einen eiligen Auf
 • Zugriff auf Informationen, die z.Zt. nicht im Speicher stehen
 
 W\"arend Interrupts meist nichts mit dem Programm in Ausf\"uhrung zu tun haben, sind Interrupts Systemaufrufe die freiwillig oder unfreiwillig vom laufenden Programm verursacht werden.
+
+Traps werden idr. von Programmen ausgel\"ost, Interrupts aus der Hardware(Tastatur, Uhr, Platte etc.)
 \\
 \\
 25. Was ist ein Signal? Nenne Beispiele für mögliche Signalquellen. Wie kann ein Prozess auf
 ein Signal reagieren?
 \\
 \\
+Ein Signal ist eine Meldung \"uber eine Ausnahmesituation an einen Prozess(Hei hier ist was passiert!).\\
+Signalquellen sind die Tastatur(strg-...), andere Prozesse, Traphandler ...\\
+Signalisierte Prozesse k\"onnen ein internes Processhandling einleiten(Prozess kann zus\"atzlich beim Betriebssystem eine Funktion die bei einem bestimmten Signal aufgerufen wird anmelden), die default Einstellung ist meist Termination(bei SIGKILL immer Termination).
 \\
 \\
 26. Beschreibe kurz einige Zustände, in denen sich ein (Unix-)Prozess befinden kann.
 \\
 \\
+User-Mode - Hier findet die normale Programmausf\"uhrung statt.\\
+Kernelmode - Hier finden Betriebssysteminterne Prozesse statt. Es gibt einen erweiterten Befehlssatz und eigene Speicherbereiche.\\
+stopped - der Prozess wurde angehalten und muss erst wieder aktiviert werden\\
+asleep - Der Prozess hat die CPU abgegeben und wartet auf ein bestimmtes Signal\\
+ready-to-run - der Prozess wurde vom Scheduler deaktiviert und auf die Run- Queue gesetzt
 \\
 \\
 27. Nenne einige Randbedingungen, auf die man beim Entwurf eines Schedulers achten sollte.
 Wie sollten rechenintensive bzw. Ein-/Ausgabe-intensive Prozesse dabei behandelt werden?
 \\
 \\
+Der Scheduler selbst sollte nicht zuviel Systemleistung verbrauchen.
+Niederpriorisierte Programme sollten seltener dran kommen als andere.
+Prozesse die auf Ger\"ate zugreifen brauchen Prozessir meist nur kurz(Festplatte, Laufwerke(request, wait, recieve))
+
 \\
 \\
 28. Wie könnte man mit Hilfe eines Round-Robin-Schedulers Prozessprioritäten „simulieren“?
 \\
 \\
+Prozesse mit h\"ohrer Priorit\"at k\"onnen mehrfach in die Warteliste geh\"angt werden.
 \\
 \\
 29. Warum bestehen die Sleep-Queue und die Run-Queue in Unix nicht aus jeweils einer
 einzigen Warteschlange? Wie sind sie stattdessen organisiert?
 \\
 \\
+Durch eine Warteschlange zu laufen dauert idR. zu lange. Statt dessen gibt es jeweils ein Array das bei der Sleep-Queue uber den \textbf{wchan} und bei Run-Queue \"uber die \textbf{Priti\"at} indiziert ist. Dort liegen dann Listen die jeweils einen oder Mehrere Prozesse Verlinken(genauer: hashes \"uber wchan und Priorit\"atsgruppen um Zeit zu sparen).
 \\
 \\
 30. Warum werden die Zustandsinformationen eines Unix-Prozesses teilweise in der ProcStruktur und teilweise in der User-Struktur abgelegt? Nenne jeweils drei charakteristische
 Beispiele für Angaben darin.
 \\
 \\
+Es gibt Informationen die F\"ur den Prozess selbst von interresse sind, wie das aktuelle Verzeichnis, Welche Dateien es ge\"offnet hat, und wo es seinen Zustand retten kann im Falle das er sleep() aufruft.\\
+F\"ur andere Prozesse kann es wichtig sein den Namen eines Prozesses zu kennen, in welchem Zustand er sich befindet(niemand spricht gerne mit Zombies) und ob der Prozess gerade auf ein Ereignis wartet(nicht tot, antwortet aber auch nicht so schnell)
 \\
 \\
 31. Skizziere kurz die Prozesserzeugung in Unix. Welche Rolle spielen die Systemaufrufe fork()
 und exec()?
 \\
 \\
+durch aufrufen von \textbf{proc()} wird eine identische Kopie des Aufrufprozesses erstellt(gleicher Adressraum(Kopie), ge\"offnete Dateien, Pipes etc.). Nur der Returnwert von \textbf{proc}($\approx$int p = proc();) unterscheidet die beiden. Der Vaterprozess erh\"allt die PID des Kindprozesses, das Kind erh\"allt eine 0;
+Durch exec() erh\"allt der Prozess einen eigenen Adressraum(execvp ("cp", argv) um cp mit Argumenten auszuf\"uhren)(viele Variablen von exec() vorhanden). Sollte eine \textbf{Ein-/Ausgabeumlenkung} angelegt werden wird diese vor \textbf{exec()} angelegt, so das der auszuf\"uhrende Prozess sich darum nicht k\"ummern muss.\\
+Alternativ kann mit vfork() ein Kind erzeugt werden das im Adressraum seines Vaters arbeitet. Papa schl\"aft bis kind fertig ist.
 \\
 \\
 32. Wie erfährt ein Unix-Prozess, ob ein Kindprozess terminiert ist? Wozu gibt es in Unix den
 Prozesszustand SZOMB („Zombie“)?
 \\
 \\
+Der Kindprozess Terminiert mit dem Aufruf exit() oder einem Signal;
+Er gibt seine Beriebsmittel(Adressraum etc.) frei, tr\"agt seinen Status(SZOMB („Zombie“)) in die ProcStruktur ein und signalisiert seinem Vater sein ableben(SIGCHILD) und ruft swtch() auf um von der run-Liste genommen zu werden.
+Wird vom Vaterprozess wait() aufgerufen, verharrt dieser inaktiv(bei Aufrufen in der Bash geht die bash automatisch auf wait()) bis ein Kindprozess sein Ableben signalisiert(SIGCHILD) oder er erf\"ahrt das das Kind bereits ein Zombie ist. wait() liefert PID und Status des Kindes, das nun verschwindet.\\
+Zombies ohne Vater werden an dessen Vater \"ubergeben, bis hin zum \textbf{init} Prozess, dieser ist standardm\"a\ss ig auf wait(), bei eintreffen eines zombies erl\"o\ss t er diesen und geht wieder in \textbf{wait()}).
 \\
 \\
 33. Welche Vor- und Nachteile hat der First-Fit- bzw. der Best-Fit-Algorithmus zur Speicherverwaltung? Wie arbeitet der Buddy-Algorithmus in etwa?
 \\
 \\
+Firstfit geht die Freispeicherliste(Stellen im Adressraum die nicht gef\"ullt sind) durch und entnimmt die gesuchte Menge aus dem esten Block der gro\ss genug ist. Dies geht anfangs gut, und ist f\"ur kleine Anfragen schnell, gr\"o\ss ere Chunks lassen sich aber nach einer Weile nur im hinteren Teil der Liste finden, so das diese immer weiter durchlaufen werden muss.\\
+Nextfit verh\"allt sich wie firstfit, nur das die Startposition die der letzten Endnahme ist. Vorteil: kein akkumulieren von kleinen Bl\"ocken am Anfang, nachteil: gro\ss e Bl\"ocke werden schnell zerhackt.\\
+Bestfit durchsucht die Liste nach dem geeignetsten Block(>= der Gr\"o\ss e). Vorteil: Mehr Anforderungen k\"onnen erf\"ullt werden, gro\ss e Bl\"ocke bleiben lange erhalten, Nahteil: st\"andiges Durchlaufen der Liste, viele unbrauchbar kleine Chunks.
+Buddyalgorithmus $\approx$ Chunks werden in eine Liste in einem Array mit Index $2^i$ eingeh\"angt(Index = Chunksize). Sie k\"onnen nur halbiert werden. sollte ein Chunk freigegeben werden wird beim einh\"angen gepr\"uft ob seine andere H\"alfte in der List h\"angt, wenn ja werden sie wieder zusammengef\"ugt.
+Vorteil: weniger Aufwand pro Ausgabe, weniger chunks, Bachteil: oft wird ein wenig mehr space gegeben als angefragt(ganz traurig ;p).
 \\
 \\
-34. Wozu bieten Systeme eine Speicherhierarchie an? Welche Beobachtung über den Speicherzugriff realer Programme liegt dem zugrunde? Welche verschiedenen Arten von Speiche
+34. Wozu bieten Systeme eine Speicherhierarchie an? Welche Beobachtung über den Speicherzugriff realer Programme liegt dem zugrunde? Welche verschiedenen Arten von Speicher
 werden typischerweise bereitgestellt?
 \\
 \\
+Speicherhierarchie wird ben\"otigt da unterschiedliche Speichermedien Unteschiedliche Zugriffszeiten und Kapazit\"aten haben $\approx$ je gr\"o\ss er desto langsamer.
+Um diesem Problem entgegenzuwirken wird versucht genutzte Daten so abzulegen das h\"aufig genutzte Daten im schnellen Cache, weniger h\"auft genutzte Daten im Haupt(Arbeits)speicher und selten genutzte Daten auf der viel langsameren Platte(oder andere Laufwerke(oder Netzwerke)) abgelegt werden. Um zu entscheiden welche Daten wohin geh\"oren wird das Lokalit\"atsprinzip angewannt(Prozesse springen nicht wild hin und her, sie laufen in schleifen, arbeiten sequentiell und springen ab und zu in einen anderen Kontext(r\"aumliches + tempor\"ares Lokalit\"atsprinzip)).\\
+Optimum ist etwa:
+
+• 85-95\% der Zugriffe direkt auf Cache
+• $>$ 99,99\% der Zugriffe auf Cache oder Hauptspeicher
+• $<$ 0,01\% der Zugriffe: Infos erst von Platte laden
 \\
 \\
 35. Warum ist es in der Regel nicht sinnvoll, den Adressraum eines Prozesses in einem Stück
 im Hauptspeicher abzulegen?
 \\
 \\
+Der Adressraum eines Programmes ist je nach Prozessorstruktur $2^32$ oder $2^64$ Bite gro\ss, dies Sprengt den Rahmen des Hauptspeichers. Es werden i.d.R. auch nur Bruchteile genutzt. Shared Speicher ist in Segmentierung einfach("Hier, das Segment geh\"ort euch beiden"). Zudem es aufwendig ist alle Internen Adressen eines Adressraums auf die neue Adresse zu \"andern(Relocation).
 \\
 \\
 36. Was versteht man unter Paging, was unter Segmentierung? Wo tritt interne Fragmentierung,
 wo externe Fragmentierung auf? Was ist das?
 \\
 \\
+Beim Paging werden Prozessadressr\"aume in Bl\"oke fester Gr\"o\sse(Pages) eingeteilt, die am St\"uck in den Arbeitsspeicher geladen werden. Dieser ist in feste "Pageframes" unterteilt, die nach Bedarf im ganzen auf die Festplatte ausgelagert werden.\\
+Bei der Segmentierung weden Adressr\"aume in Segmente eingeteilt, diese werden dann \"uber eine Tabelle auf den Hauptspeicher abgebildet.(Unabh\"angig vom Pagen, eine Ebene tiefer)\\
+Externe Fragmentierung beschreibt das Freilassen von Adressen im Adressraum zwischen genutzten Bl\"cken(Beispiel: FreispeicherListe), Interne Fragmentierung beschreibt das Freilassen von Speicher in vergebenen Bl\"ocken(ungenutztes Ende).
+Externe Fragmentierung Tritt bei der Speicherverwaltung leicht auf, da Bl\"ocke unterschiedliche gr\"o\ss en haben k\"onnen, bei Verwendung des Buddy-Algorithmus kommt es auch zu interner.\\
+Bei der Segmentierung kommt es auch leicht zu externer Fragmentierung, da Segmente unterschiedlich gro\ss sein k\"onnen. Interne entf\"allt, da der Inhalt f\"ur die Segmentierung egal ist.\\
+Beim Paging kommt es nicht zu externer Fragmentierung, da Pagefrages eine Feste Gr\"o\ss e haben und so keine "Spalten" entstehen. Es kommt allerdings h\"aufig zu interner Fragmentierung da Pages im ganzen f\"ur abbildungen reserviert werden(Segmentl\"ange Modulo Pagegr\"o\ss e).
 \\
 \\
 37. Aus welchen Teilen besteht eine virtuelle Adresse zumeist? Wie ermittelt sich daraus die
 entsprechende Hauptspeicheradresse, d. h. wie läuft die Adressverwaltung in etwa ab?
 \\
 \\
+Die Virtuelle Adresse Besteht aus dem Index der Page in der Page-Tabelle auf der sie sich befindet + die Adresse in der Page. Die Page-Tabelle verweist gegebenenfalls auf den Frame im Hauptspeicher.  Die prozesseigene Page-Table wei\ss ob und wenn ja auf welchem Pageframe im Hauptspeicher die Page liegt. Sie verwaltet auch die Schutz und ZustandsBits, hardwareunterst\"utzt vod der Memory-Managemen-tUnit(MMU).
 \\
 \\
 38. Wie können mehrere Prozesse mit Hilfe virtueller Adressierung auf dieselben Programmstücke (oder auch Datenbereiche) zugreifen?
 \\
 \\
+Zur Nutzung von Shared Memmory verweisen unterschiedliche PTE(PageTableEntries) auf die selbe Page.
 \\
 \\
 39. Warum ist ein perfekter Algorithmus zur Verdrängung von Pages aus dem Hauptspeicher
-nicht realisierbar? Wie arbeiten die folgenden Algorithmen in etwa:
-a) FIFO (First-In-First-Out),
-b) LFU (Least-Frequently-Used),
-c) LRU (Least-Recently-Used)?
+nicht realisierbar?\\
 \\
 \\
+Die ideale Pageverd\"angung w\"urde die Page entfernen die am l\"angsten nicht gebraucht werden wird. Da dies nicht vorhersagbar ist, muss es eine Aproximation tun.\\
+\\
+ Wie arbeiten die folgenden Algorithmen in etwa:\\
+a) FIFO (First-In-First-Out),\\
+\tab Bei Bedarf wird die am l\"angsten vorhandene Page entfernt. Vorteil: einfach, billig. Nachteil: Schlechte Prognose, da st\"andig gebrauchte Pages entfernt werden.\\
+b) LFU (Least-Frequently-Used),\\
+\tab Bei Bedarf wird die Page entfernt die am Wenigsten Zufriffe hat. Nachteil: Schlechte Prognose, da neue Pages in Frage kommen, sehr aufwendig, braucht einen Agingprocess, da sonst ehemalig oft gebrauchte Pages den Hauptspeicher vollm\"ullen.\\
+c) LRU (Least-Recently-Used)?\\
+\tab Bei Bedarf wird die Page entfernt auf die am l\"angsten nicht zugegriffen wurde. Vorteil: gute Approximation, Nachteil: ohne teure Hardwareunterst\"utzung viel zu aufw\"andig.
 \\
 \\
 40. In welche dieser Kategorien kann man NRU (Not-Recently-Used) einordnen? Wie arbeitet
 der Clock-Hand-Algorithmus?
 \\
 \\
+Least Recently Used passt am besten zu Not Recently Used.
+\\
+\\
+Im Clock-Hand-Algorithmus wird bei jedem Zugriff auf eine Page das Reference-Bit(durch Valid-Bit ersetzt) auf True gesetzt. Dazu l\"auft ein Programm das kontinuierlich die Liste der Pages abl\"auft sich das Reference-Bit anguckt. Steht es auf True, so wird es auf false gesetzt, ist es auf false wird es je nach Implementierung als entfernbar markiert(bei Pagefaults dann zur\"uckgeschrieben/entfernt), oder auf die Festplatte zur\"uckgeschrieben und als ersetzbar markiert(auf die Freispeicherliste geh\"angt)(So kann es gegebenenfalls entfernt werden oder, falls es doch aufgerufen wird, wieder aktiviert werden(System darf nur einen Hauptspeicher haben um Unversehrtheit zu garantieren)).
+Der Clock-Hand-Algorithmus kann so implementiert werden das er pausiert wenn genug Pages zur Verf\"ugung stehen, oder gegebenenfalls mit Zwei "Zeigern" in festem Abstand arbeiten um schneller zu verdr\"angen(Two-Handed-Algorithm).
 \\
 \\
 41. Was passiert, wenn die Umlaufzeit des Zeigers beim Clock-Hand-Algorithmus zu groß bzw.
 zu klein gewählt wird? Wie kann ein zweiter Zeiger den Algorithmus verbessern?
 \\
 \\
+Bei zu gro\sser Umlaufzeit gibt es schnell keine frames mehr. Bei zu kleiner Umlaufzeit werden zuviele Pages freigestellt und der Algorithmus kann zuviel Recourcen verbrauchen.
 \\
 \\
 42. Was ist Swapping? Warum wenden auch Paging-Systeme dieses Verfahren an bzw. unter
 welcher Bedingung?
 \\
 \\
+Bei einer zu hohen Pagefault Rate(nicht alle Workingsets passen parallel in den Hauptspeicher) kann das System einzelne Prozesse auf Eis legen($\approx$ asleep) um den Gesamtablauf zu entlasten. Dabei sollten die pausierten Programme regelm\"a\ss ig ausgetauscht werden um akzeptable Reaktionszeiten zu gew\"ahrleisten.
 \\
 \\
 43. Wie kann man die Vorteile von Paging und Segmentierung kombinieren?
 \\
 \\
+In dem man den Virtuellen Adressraum  eines Prozesses zu echten Segmenten unterteilt, die wiederrum in pages gleicher gro\"ss e aufgeteilt sind. Die Region-nummer innerhalb einer virtuellen adresse adressiert die pagetabelle dieser region. Die Pagenummer inerhalb der virtuellen Adresse indiziert dann den entspr. Eintrag in der gew\"ahlten Pagetabelle.
+Adresse = abschnitt 1 = Region, abschnitt2 page, abschnitt3 adresse in Page.
 \\
 \\
 44. Wozu bzw. wo wird bei der Speicherverwaltung häufig ein Assoziativspeicher eingesetzt?
 \\
 \\
+Zum schnellen zugriff auf die gerade wichtigsten Pagetabelleneintr\"age verwendet man h\"aufig einen Assoziativspeicher als Cache. 
 \\
 \\
 45. Beschreibe kurz die Zugriffsoperationen open(), close(), lseek(), read() und write()
 auf ein Unix-Filesystem. Welche Rolle spielt dabei der Filedeskriptor?
 \\
 \\
+open()\\
+\tab open erh\"allt Angaben \"ueber den Dateipfad, die hinterher erlaubten Operationen und die Zugriffsrechte falls die Funktion eine neue Datei erzeugt und gibt einen File Descriptor zur\"uck, der als Verweis f\"ur Folgeoperationen genutzt wird.\\
+close()\\
+\tab beendet den \"ubergebenen File Descriptor.\\
+lseek()\\
+\tab bekommt den Filedescriptor, die anzahl der schritte um die Verschoben wird und ob vom Anfang, der aktuellen Position oder vom Ende aus verschoben werden soll(kann den File verlassen und dort unheil anrichten).\\
+read()\\
+\tab erh\"allt den File Descriptor, den Verweis auf einen Buffer und die Anzahl der Bytes die gelesen werden sollen.\\
+write()\\
+\tab bekommt parallel zu read() den File Descriptor, den Verweis auf einen Buffer und die Anzahl der Bytes die geschrieben werden sollen(ggf. \"uberschreibt es auch Daten)).\\
+Der File Descriptor ist eine "Kurzbeschreibung" der ge\"offneten Datei. Er wird von den anderen Operationen als Verweis genutzt.
 \\
 \\
 46. Wie sieht die Struktur des Unix-V7-Dateisystems auf der Platte in etwa aus? Warum erfolgt
 die Verwaltung der Freispeicherliste über Indirekt-Blöcke?
 \\
 \\
+Der Superblock verwaltet unter anderem die freien Inodes und Datenbl\"ocke.\\
+Der Inodebereich mit je einem Eintrag pro Datei mit Verwaltungsinformationen(Anzahl der Hardlinks, Besitzer, Gr\"o\ss e, letzter Zugriff etc. und die Verweise auf die Datenbl\"ocke)\\
+Dateb\"ocke enthalten Dateien oder inodeverweise
 \\
 \\
 47. Welche Angaben enthält ein Inode? Welche Angaben enthält eine Verzeichnis-Datei (Euch
 besser bekannt als „Directory“)?
 \\
 \\
+
 \\
 \\
 48. Welche Aufgaben hat der Buffer Cache in Unix?
